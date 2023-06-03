@@ -1,0 +1,92 @@
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdarg.h>
+
+typedef struct t_process {
+	int *writepipe;
+	int *readpipe;
+	int pid;
+	struct t_process *self;
+	
+	void (*writeInt) (int, struct t_process*);
+	int (*readInt) (struct  t_process*);
+} t_process;
+
+int calculate_mean(int, ...);
+void test();
+void replaceStd(int, int);
+int readProcessInt(t_process*);
+void writeProcessInt(int, t_process*);
+
+t_process **processList;
+
+
+int main(int argc, char *argv[])
+{
+
+	char *options[4] = {"1 -\n", "2 -\n", "3 -\n", "4 - \n"};
+
+	for(int i = 0; i < 4; i++) write(1, options[i], strlen(options[i]));
+
+	test();
+
+
+
+}
+
+void test()
+{
+	//processList = (t_process**) malloc(sizeof(t_process*) * 2);
+	processList =  malloc(sizeof(t_process *) * 2);
+	processList = (t_process *) malloc(sizeof(t_process));
+	int inpip[2];
+	int outpip[2];
+	int pid; 
+	pipe(inpip);
+	pipe(outpip);
+
+	if((pid = fork()) > 0)	
+	{
+		processList[0]->pid =  pid;
+		processList[0]->writepipe = inpip;
+		processList[0]->readpipe = outpip;
+		processList[0]->writeInt = writeProcessInt;
+		processList[0]->readInt  = readProcessInt;
+		close(inpip[1]);
+		close(outpip[0]);
+	}
+	 else 
+	{
+		replaceStd(0, inpip[1]);
+		replaceStd(1, outpip[0]);
+		execlp("./calculator","calculator", (void *) 0);
+
+
+	}
+}
+
+int readProcessInt(t_process *self)
+{
+	int number;
+	read(self->writepipe[1], &number, sizeof(int));
+
+	return number;
+
+}
+
+void writeProcessInt(int value, t_process *self)
+{
+	write(self->readpipe[0], &value, sizeof(int));
+
+}
+
+
+void replaceStd(int replace, int with)
+{
+	close(replace);
+	dup(with);
+	close(replace);
+}
+

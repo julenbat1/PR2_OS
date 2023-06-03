@@ -1,0 +1,314 @@
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdarg.h>
+
+typedef struct t_process {
+	int writepipe;
+	int readpipe;
+	int pid;
+
+	
+	void (*writeInt) (int, struct t_process*);
+	int (*readInt) (struct  t_process*);
+	void (*delMyself) (struct t_process*);
+
+}t_process;
+
+typedef struct  nodeProcess {
+	t_process *currentNode;
+	struct nodeProcess *parentNode;
+	struct nodeProcess *nextNode;
+
+	int (*hasNext) (struct nodeProcess*);
+	struct nodeProcess* (*next) (struct nodeProcess*);
+	struct nodeProcess* (*prev) (struct nodeProcess*);
+}nodeProcess;
+
+typedef  struct linkedList {
+	nodeProcess *head;
+	nodeProcess *tail;
+	int size;
+
+	void (*addNode)(struct linkedList*, nodeProcess*);
+	void (*removeNode)(struct linkedList*, int);
+}linkedList;
+
+void addNodeProcess(linkedList *, nodeProcess*);
+void removeNodeProcess(linkedList *, int);
+nodeProcess * init_nodeProcess(t_process *);
+
+
+
+
+
+float calculateMean(int, int);
+int calculate_mean(int, ...);
+void replaceStd(int, int);
+int readProcessInt(t_process*);
+void writeProcessInt(int, t_process*);
+void printMainOptions(int, char**);
+void deleteMe(t_process*);
+int readOptionThree();
+
+void addnodeProcess(linkedList*, nodeProcess*);
+void removenodeProcess(linkedList*, int pid);
+void calculateProcesses(int);
+linkedList *processList = init_processList();
+linkedList *init_processList();
+t_process* init_t_process();
+
+int getIntInput();
+void createProcesses(int);
+void clear();
+
+int main(int argc, char *argv[])
+{
+
+	char *options[4] = {"1 -Create Calculator process\n", "2 -Eliminate Calculator process\n", "3 -Calculate result\n", "4 -End all applications\n"};
+	printMainOptions(4, options);
+}
+
+void createProcesses(int amount)
+{
+	for(int i = 0; i < amount; i++)
+	{
+		t_process *process = init_t_process();
+		nodeProcess *node = init_nodeProcess(process);
+		processList->addNode(processList, node);
+
+	}
+}
+
+int getIntInput()
+{
+	char strnumber[40];
+	int n = 0;
+
+	while((read(0, &strnumber[n] , 1) > 0) && (strnumber[n] != '\n') && ( n++ < 40))printf("%c \n", strnumber[n]);
+
+	n = atoi(strnumber);
+
+	return  n;
+}
+
+nodeProcess *init_nodeProcess(t_process *process)
+{
+	nodeProcess *node = (nodeProcess *) malloc(sizeof(nodeProcess));
+	node->currentNode = process;
+
+	return node;
+}
+
+void addNodeProcess(linkedList *list, nodeProcess *node)
+{
+
+	if(list->head == (void *) 0) list->head = node;
+	else
+	{
+		nodeProcess *tail = list->tail;
+		tail->nextNode = node;
+		node->parentNode = tail;
+	}
+	
+	list->tail = node;
+	list->size++;
+}
+
+void clear()
+{
+	static char t = 'a';
+	while( t != '\n' && (read(0, &t, sizeof(t))> 0));
+}
+
+void removeNodeProcess(linkedList *list, int pid)
+{
+	if(list->size > 1)
+	{
+		nodeProcess *n = list->head;
+		if(n->currentNode->pid == pid)
+		{
+			nodeProcess *removeMe = n;
+			list->head = n->nextNode;
+			list->head->parentNode = (void *) 0;
+			free(removeMe);
+		}
+
+		else 
+		{
+			while ((n = n->nextNode)->currentNode->pid != pid);
+			nodeProcess *x = n->parentNode;
+			nodeProcess *y = n->nextNode;
+
+			x->nextNode = y;
+			y->parentNode = x;
+			
+			free(n);
+		}
+
+
+		list->size --;
+	}
+	
+	printf("Process list size is less or equal to 1");
+}
+
+int readOptionTwo()
+{
+	char r[20];
+	int res = 10;
+	
+	return res;
+
+}
+
+int readOptionThree()
+{
+	char r[4];
+	int res;
+	read(1, r, 4);
+
+	res = atoi(r);
+	if(res < 1 || res > 1000) 
+	{
+		printf("Number must be [1-1000] please, try again");
+		readOptionThree();
+	}
+
+	return res;
+}
+
+
+void calculateProcesses(int number)
+{
+	int total;
+	int pAmount = 0;
+	nodeProcess *process = processList->head;
+
+	while(process != (void *) 0 && process->currentNode != (void *) 0 )
+	{
+		t_process *current= process->currentNode;
+		current->writeInt( number, current);
+		total += current->readInt(current); 
+		pAmount++;
+	}	
+
+	float res = calculateMean(pAmount, total);
+	printf("The mean result is: %f", res);
+}
+
+float calculateMean(int pAmount, int number)
+{
+	return ((float) number / (float) pAmount);
+
+}
+void printMainOptions(int optSize, char *options[])
+{
+	char selectedOpt;
+	for(int i = 0; i < optSize; i++) write(1, options[i], strlen(options[i]));
+	read(0, &selectedOpt, sizeof(selectedOpt));
+	clear();
+
+	switch(selectedOpt)
+	{
+		case '1':
+			printf("indica la cantidad de procesos [1-5] que quieras crear \n");
+			int amnt = getIntInput();
+			clear(); 		
+			createProcesses(amnt);
+			break;
+		case '2':
+			printf("introduce el pid del proceso que quieres eliminar \n");
+		//	deleteProcess();
+			break;
+		case '3':
+			printf("Indica un número [1-1000]");
+			int n = getIntInput();
+			clear();
+			calculateProcesses(n);
+			break;
+		case '4':
+			//write(1, )
+			//deleteAll();
+			break;
+
+		default:
+			printf("No has introducido una opción válida \n");
+			break;
+	}
+
+	printMainOptions(optSize, options);
+
+
+}
+
+
+
+t_process* init_t_process()
+{	
+	int pid;
+	int inpip[2];
+	int outpip[2];
+
+	pipe(inpip);
+	pipe(outpip);
+	t_process *process  =  (t_process *) malloc(sizeof(t_process));
+	
+	if((pid = fork()) > 0)
+	{
+		process->pid = pid;
+		process->writepipe =  inpip[1];
+		process->readpipe = inpip[0];
+		process->writeInt = writeProcessInt;
+		process->readInt = readProcessInt;
+		process->delMyself = deleteMe;
+	}
+	else
+	{
+		replaceStd(0, inpip[0]);
+		replaceStd(1, outpip[1]);
+		execlp("./calculator", "calculator", (void *) 0);
+	}
+
+	return process;
+
+}
+
+void deleteMe(t_process *process)
+{
+	free(process);
+}
+
+int readProcessInt(t_process *self)
+{
+	int number;
+	read(self->writepipe, &number, sizeof(int));
+
+	return number;
+
+}
+
+void writeProcessInt(int value, t_process *self)
+{
+	write(self->readpipe, &value, sizeof(int));
+
+}
+
+
+void replaceStd(int replace, int with)
+{
+	close(replace);
+	dup(with);
+	close(with);
+}
+
+linkedList *init_processList()
+{
+	linkedList *n = (linkedList *) malloc(sizeof(linkedList));
+	n->size = 0;
+	n->removeNode = removeNodeProcess;
+	n->addNode = addNodeProcess;
+	return n;
+}
+
