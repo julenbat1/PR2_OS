@@ -36,7 +36,10 @@ typedef  struct linkedList {
 
 	void (*addNode)(struct linkedList*, nodeProcess*);
 	void (*removeNode)(struct linkedList*, int);
+	void (*forEach) (struct linkedList*, void (*fn)(t_process*));
 }linkedList;
+
+void linkedForEach(linkedList *, void (*fn)(t_process*));
 
 void addNodeProcess(linkedList *, nodeProcess*);
 void removeNodeProcess(linkedList *, int);
@@ -46,7 +49,7 @@ nodeProcess *getNode(linkedList *, int);
 
 
 
-float calculateMean(int, int);
+int calculateMean(int, int);
 void replaceStd(int, int);
 int readProcessInt(t_process*);
 void writeProcessInt(int, t_process*);
@@ -61,6 +64,7 @@ void clear();
 
 void deleteAll();
 
+void printPid(t_process *);
 
 linkedList *processList;
 linkedList *init_processList();
@@ -73,8 +77,8 @@ int main(int argc, char *argv[])
 
 	processList = init_processList();
 
-	char *options[4] = {"1 -Create Calculator process\n", "2 -Eliminate Calculator process\n", "3 -Calculate result\n", "4 -End all applications\n"};
-	printMainOptions(4, options);
+	char *options[5] = {"1 -Create Calculator process\n", "2 -Eliminate Calculator process\n", "3 -Calculate result\n", "4 -End all applications\n", "5 - Print all process pids \n"};
+	printMainOptions(5, options);
 }
 
 void createProcesses(int amount)
@@ -99,6 +103,14 @@ int getIntInput()
 	return  n;
 }
 
+void printPid(t_process *process)
+{
+	char pid[20];
+	sprintf(pid, "Pid: %d\n", process->pid);
+	write(1, pid, strlen(pid));
+
+}
+
 nodeProcess *init_nodeProcess(t_process *process)
 {
 	nodeProcess *node = (nodeProcess *) malloc(sizeof(nodeProcess));
@@ -120,7 +132,6 @@ void addNodeProcess(linkedList *list, nodeProcess *node)
 
 	list->tail = node;
 	list->size += 1;
-	printf("size %d", list->size);
 }
 
 void clear()
@@ -205,38 +216,50 @@ int readOptionThree()
 	return res;
 }
 
+void linkedForEach(linkedList* list, void (*fn)(t_process*) )
+{
+	nodeProcess *current = list->head;
+	if(list->size == 0)  return;
+	while((current != (void *) 0) && (current->currentNode != (void *) 0))
+	{
+		fn(current->currentNode);
+		current = current->nextNode;
+		sleep(1);
+	}
+
+}
+
 
 void calculateProcesses(int number)
 {
-	printf("joined calculateProcesses \n");
-	int total = 0;
+	int total = 0, res;
 	int pAmount = 0;
 	nodeProcess *process = processList->head;
 
 	while(process != (void *) 0 && process->currentNode != (void *) 0 )
 	{
-		t_process *current= process->currentNode;
-		current->writeInt( number, current);
+		t_process *current = process->currentNode;
+		current->writeInt(number, current);
 		total += current->readInt(current); 
 		pAmount++;
 		printf("n: %d, * pid: %d , total %d, with %d porcess \n", number, current->pid, total, pAmount);
 		if((process = process->nextNode) == (void *) 0) break;
 	}
 
-	float res = calculateMean(pAmount, total);
-	printf("The mean result is: %f", res);
+	res = calculateMean(pAmount, total);
+	printf("The mean result is: %d", res);
+	fflush(stdout);
 }
 
-float calculateMean(int pAmount, int number)
+int calculateMean(int pAmount, int number)
 {
-	return ((float) number / (float) pAmount);
+	return ( number /  pAmount);
 
 }
 void printMainOptions(int optSize, char *options[])
 {
 	int selectedOption;
 	for(int i = 0; i < optSize; i++) write(1, options[i], strlen(options[i]));
-	
 
 	scanf("%d", &selectedOption);
 
@@ -265,10 +288,11 @@ void printMainOptions(int optSize, char *options[])
 			printf("Are you sure ? y/n \n");
 			char r;
 			scanf(" %c", &r);
-			printf("selected option is %c", r);
 			r == 'y' ? deleteAll(): printf("aborting deletion all processes\n");
 			break;
-
+		case 5:
+			processList->forEach(processList, printPid);
+			break;
 		default:
 			printf("No has introducido una opción válida \n");
 			break;
@@ -294,7 +318,6 @@ void deleteAll()
 
 	}
 
-	free(processList);
 	processList = init_processList();
 
 
@@ -315,17 +338,19 @@ t_process* init_t_process()
 	if((pid = fork()) > 0)
 	{
 		process->pid = pid;
-		process->writepipe =  inpip[1];
+		process->writepipe =  outpip[1];
 		process->readpipe = inpip[0];
 		process->writeInt = writeProcessInt;
 		process->readInt = readProcessInt;
 		process->delMyself = deleteMe;
 
+		close(inpip[1]);
+		close(outpip[0]);
 	}
-	else
+	else if (pid == 0)
 	{
-		replaceStd(0, inpip[0]);
-		replaceStd(1, outpip[1]);
+		replaceStd(0, outpip[0]);
+		replaceStd(1, inpip[1]);
 		execlp("./calculator", "calculator", (void *) 0);
 	}
 
@@ -342,21 +367,23 @@ void deleteMe(t_process *process)
 			char message[200];
 			sprintf(message, "process pid: %d has been killed with signal %d \n", process->pid, WTERMSIG(process->status));
 			write(1, message, strlen(message));
-	}	
+	}
+	free(process);
 }
 
 int readProcessInt(t_process *self)
 {
 	int number;
-	read(self->writepipe, &number, sizeof(int));
+	read(self->readpipe, &number, sizeof(int));
 
 	return number;
 
 }
 
+
 void writeProcessInt(int value, t_process *self)
 {
-	write(self->readpipe, &value, sizeof(int));
+	write(self->writepipe, &value, sizeof(int));
 
 }
 
@@ -374,6 +401,7 @@ linkedList *init_processList()
 	n->size = 0;
 	n->removeNode = removeNodeProcess;
 	n->addNode = addNodeProcess;
+	n->forEach = linkedForEach;
 	return n;
 }
 
